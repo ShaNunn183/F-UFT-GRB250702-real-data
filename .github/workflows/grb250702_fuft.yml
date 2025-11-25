@@ -1,17 +1,55 @@
+name: GRB 250702BDE F-UFT analysis
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download GBM data (or create synthetic)
+        env:
+          GBM_FITS_URL: ${{ secrets.GBM_FITS_URL }}
+        run: |
+          if [ -z "$GBM_FITS_URL" ]; then
+            echo "No GBM_FITS_URL provided. Using synthetic data."
+            python - << 'EOF'
+import pathlib, numpy as np
+root = pathlib.Path(__file__).resolve().parents[2]
+data_dir = root / "data"
+data_dir.mkdir(exist_ok=True)
+
+t = np.linspace(0.0, 25000.0, 100000)
 flux = np.sin(2*np.pi*t/2825.0) + 0.5*np.random.randn(len(t))
-np.savez(data_dir / "gbm_lightcurve.npz", time=t, rate=flux)
-print("Created synthetic data.")
+
+np.savez(data_dir/"gbm_lightcurve.npz", time=t, rate=flux)
+print("Created synthetic data at", data_dir/"gbm_lightcurve.npz")
 EOF
           else
-            echo "Using real GBM data."
+            echo "Downloading real Fermi GBM data..."
             python src/download_gbm_data.py
           fi
 
-      - name: Run F-UFT power-spectrum analysis
+      - name: Run F-UFT analysis
         run: |
           python src/analyze_gbm_fuft.py
 
-      - name: Upload results artifact
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
           name: grb250702-results
