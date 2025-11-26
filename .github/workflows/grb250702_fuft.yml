@@ -9,48 +9,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Prepare GBM data
-      env:
-        GBM_FITS_URL: ${{ secrets.GBM_FITS_URL }}
-      run: |
-        mkdir -p data
-        if [ -z "$GBM_FITS_URL" ]; then
-          echo "No GBM_FITS_URL provided. Creating synthetic light curve."
-          python - <<EOF
+      - name: Prepare GBM data
+        env:
+          GBM_FITS_URL: ${{ secrets.GBM_FITS_URL }}
+        run: |
+          mkdir -p data
+
+          if [ -z "$GBM_FITS_URL" ]; then
+            echo "No GBM_FITS_URL secret found — creating synthetic light curve."
+            python - <<'EOF'
 import numpy as np
 import pathlib
+
 root = pathlib.Path("data")
+root.mkdir(exist_ok=True)
+
 t = np.linspace(0.0, 25000.0, 100000)
-flux = np.sin(2*np.pi*t/2825.0) + 0.5*np.random.randn(len(t))
+flux = np.sin(2 * np.pi * t / 2825.0) + 0.5 * np.random.randn(len(t))
+
 np.savez(root / "gbm_lightcurve.npz", time=t, rate=flux)
-print("Synthetic light curve saved.")
+print("Synthetic gbm_lightcurve.npz generated.")
 EOF
-        else
-          echo "Downloading real Fermi GBM file..."
-          python src/download_gbm_data.py
-        fi
+          else
+            echo "Downloading real Fermi GBM file..."
+            python src/download_gbm_data.py
+          fi
 
-    - name: Run F-UFT power-spectrum analysis
-      run: |
-        python src/analyze_gbm_fuft.py
+      - name: Run F-UFT power-spectrum analysis
+        run: |
+          python src/analyze_gbm_fuft.py
 
-    - name: Upload results artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: grb250702-results
-        path: |
-          results/
-          data/gbm_lightcurve.npz
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grb250702-results
+          path: |
+            results/
+            data/gbm_lightcurve.npz
